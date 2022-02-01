@@ -17,6 +17,10 @@ const contacts = new Shema(
       type: Boolean,
       default: false,
     },
+    owner: {
+      type: mongoose.SchemaTypes.ObjectId,
+      ref: "user",
+    },
   },
   { versionKey: false }
 );

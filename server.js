@@ -1,10 +1,9 @@
 const app = require("./app");
 const mongoose = require("mongoose");
 mongoose.Promise = global.Promise;
+require("dotenv").config();
 
-const DB_URL =
-  "mongodb+srv://Artem:1123581321f@cluster0.jzgju.mongodb.net/GOIT";
-
+const DB_URL = process.env.DB_URL;
 async function startApp() {
   try {
     mongoose.connect(DB_URL);
