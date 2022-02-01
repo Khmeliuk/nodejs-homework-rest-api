@@ -7,19 +7,20 @@ const {
   put,
   patch,
 } = require("./controlRouter");
+const { auth } = require("./ctrlUser");
 
 const router = express.Router();
 
-router.get("/", get);
+router.get("/", auth, get);
 
-router.get("/:contactId", getContact);
+router.get("/:contactId", auth, getContact);
 
-router.post("/", post);
+router.post("/", auth, post);
 
-router.delete("/:contactId", remove);
+router.delete("/:contactId", auth, remove);
 
-router.put("/:contactId", put);
+router.put("/:contactId", auth, put);
 
-router.patch("/:contactId/favorite", patch);
+router.patch("/:contactId/favorite", auth, patch);
 
 module.exports = router;
