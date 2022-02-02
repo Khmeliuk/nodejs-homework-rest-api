@@ -8,6 +8,8 @@ const {
   logout,
   login,
   addAvatar,
+  verify,
+  reverify,
 } = require("./ctrlUser");
 
 require("dotenv").config();
@@ -21,5 +23,9 @@ router.get("/users/current", auth, current);
 router.get("/users/logout", auth, logout);
 
 router.patch("/users/avatars", auth, multer.single("picture"), addAvatar);
+
+router.get("/users/verify/:verificationToken", verify);
+
+router.post("/users/verify", reverify);
 
 module.exports = router;
