@@ -4,6 +4,10 @@ const User = require("../../models/user");
 require("dotenv").config();
 const secret = process.env.SECRET;
 const jwt = require("jsonwebtoken");
+const gravatar = require("gravatar");
+const path = require("path");
+const fs = require("fs").promises;
+const Jimp = require("jimp");
 
 const userSchema = Joi.object({
   email: Joi.string().required(),
@@ -16,8 +20,6 @@ const loginSchema = Joi.object({
 
 const auth = (req, res, next) => {
   passport.authenticate("jwt", { session: false }, (err, user) => {
-    console.log(user, "user");
-    console.log(req.headers.authorization !== "Bearer " + user.token);
     if (!user || err || req.headers.authorization !== "Bearer " + user.token) {
       return res.status(401).json({
         status: "error",
@@ -27,9 +29,14 @@ const auth = (req, res, next) => {
       });
     }
     req.user = user;
+
     next();
   })(req, res, next);
 };
+
+async function patchAvatar(id, patch) {
+  return await User.findByIdAndUpdate({ _id: id }, patch, { new: true });
+}
 
 const login = async (req, res, next) => {
   const validator = userSchema.validate(req.body);
@@ -85,12 +92,14 @@ const signup = async (req, res, next) => {
     return res.status(409).json({
       status: "Conflict",
       code: 409,
-      ResponseBody: { message: "Email in use" },
+      ResponseBody: { message: email },
     });
   }
 
   try {
-    const newUser = new User({ email });
+    const avatarURL = gravatar.url(email);
+
+    const newUser = new User({ email, avatarURL });
     newUser.setPassword(password);
     await newUser.save();
     res.status(201).json({
@@ -98,7 +107,7 @@ const signup = async (req, res, next) => {
       code: 201,
       data: {
         user: {
-          email: "example@example.com",
+          email: email,
           subscription: "starter",
         },
       },
@@ -118,7 +127,6 @@ const current = (req, res, next) => {
     return;
   }
   const { email } = req.user;
-  console.log(req.user);
   res.json({
     status: "success",
     code: 200,
@@ -129,7 +137,6 @@ const current = (req, res, next) => {
 };
 
 const logout = async (req, res, next) => {
-  console.log(req);
   await User.updateOne({ _id: req.user.id }, { token: null });
   res.json({
     status: "success",
@@ -137,4 +144,26 @@ const logout = async (req, res, next) => {
   });
 };
 
-module.exports = { auth, signup, current, logout, login };
+const addAvatar = async (req, res, next) => {
+  await Jimp.read(req.file.path)
+    .then((avatar) => {
+      return avatar.resize(256, 256).write(req.file.path);
+    })
+    .catch((err) => {
+      console.error(err);
+    });
+  const { description } = req.body;
+  const { path: temporaryName, originalname } = req.file;
+  const newPathFile = path.join(process.cwd(), "./public/avatars");
+  const fileName = path.join(newPathFile, `${req.user.email}${originalname}`);
+  patchAvatar(req.user._id, { avatarURL: fileName });
+  try {
+    await fs.rename(temporaryName, fileName);
+  } catch (err) {
+    await fs.unlink(temporaryName);
+    return next(err);
+  }
+  res.json({ description, message: fileName, status: 200 });
+};
+
+module.exports = { auth, signup, current, logout, login, addAvatar };
