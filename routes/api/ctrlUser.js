@@ -8,6 +8,8 @@ const gravatar = require("gravatar");
 const path = require("path");
 const fs = require("fs").promises;
 const Jimp = require("jimp");
+const { v4: uuidv4 } = require("uuid");
+const transporter = require("../../config/mail");
 
 const userSchema = Joi.object({
   email: Joi.string().required(),
@@ -50,11 +52,11 @@ const login = async (req, res, next) => {
   const { email, password } = req.body;
   const user = await User.findOne({ email });
 
-  if (!user || !user.validPassword(password)) {
+  if (!user || !user.validPassword(password) || !user.verify) {
     return res.status(400).json({
       status: "error",
       code: 400,
-      message: "Incorrect login or password",
+      message: "Incorrect login or password or you email is not verify",
       data: "Bad request",
     });
   }
@@ -87,6 +89,7 @@ const signup = async (req, res, next) => {
     return;
   }
   const { email, password } = req.body;
+
   const user = await User.findOne({ email });
   if (user) {
     return res.status(409).json({
@@ -98,8 +101,21 @@ const signup = async (req, res, next) => {
 
   try {
     const avatarURL = gravatar.url(email);
+    const verificationToken = uuidv4();
 
-    const newUser = new User({ email, avatarURL });
+    const emailOptions = {
+      from: "bigsmash@ukr.net",
+      to: req.body.email,
+      subject: "verificationToken",
+      text: "http://127.0.0.1:3000/users/verify/" + verificationToken,
+    };
+    try {
+      transporter.sendMail(emailOptions);
+    } catch (error) {
+      console.log(error);
+    }
+
+    const newUser = new User({ email, avatarURL, verificationToken });
     newUser.setPassword(password);
     await newUser.save();
     res.status(201).json({
@@ -166,4 +182,72 @@ const addAvatar = async (req, res, next) => {
   res.json({ description, message: fileName, status: 200 });
 };
 
-module.exports = { auth, signup, current, logout, login, addAvatar };
+const verify = async (req, res, next) => {
+  try {
+    const verificationToken = req.params.verificationToken.toString();
+
+    const user = await User.findOne({ verificationToken });
+    if (user) {
+      patchAvatar(user._id, { verify: true, verificationToken: null });
+      res.json({ message: "Verification successful", status: 200 });
+    } else
+      res.json({
+        Status: 404,
+        message: "User not found",
+      });
+  } catch (error) {
+    console.log(error);
+  }
+};
+
+const reverify = async (req, res, next) => {
+  try {
+    const validator = loginSchema.validate(req.body);
+    if (validator.error) {
+      res.json({
+        Status: 400,
+        message: validator.error.message,
+      });
+      return;
+    }
+
+    const email = req.body.email;
+    const user = await User.findOne({ email });
+    if (user) {
+      if (user.verificationToken) {
+        const emailOptions = {
+          from: "bigsmash@ukr.net",
+          to: req.body.email,
+          subject: "verificationToken",
+          text: "http://127.0.0.1:3000/users/verify/" + user.verificationToken,
+        };
+        try {
+          transporter.sendMail(emailOptions);
+        } catch (error) {
+          console.log(error);
+        }
+        res.json({ message: "Verification email sent", status: 200 });
+      } else
+        res.json({
+          message: "Verification has already been passed",
+          status: 400,
+        });
+    } else res.json({ message: "email is not exist" });
+  } catch (error) {
+    res.json({
+      message: error,
+    });
+    console.error(error);
+  }
+};
+
+module.exports = {
+  auth,
+  signup,
+  current,
+  logout,
+  login,
+  addAvatar,
+  verify,
+  reverify,
+};
